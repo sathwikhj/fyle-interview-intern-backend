@@ -1,4 +1,5 @@
 import enum
+from flask import jsonify, abort
 from core import db
 from core.apis.decorators import AuthPrincipal
 from core.libs import helpers, assertions
@@ -45,6 +46,8 @@ class Assignment(db.Model):
 
     @classmethod
     def upsert(cls, assignment_new: 'Assignment'):
+        if assignment_new.content is None:
+            abort(400, description="Content and grade are required fields and cannot be null.")
         if assignment_new.id is not None:
             assignment = Assignment.get_by_id(assignment_new.id)
             assertions.assert_found(assignment, 'No assignment with this id was found')
@@ -52,6 +55,7 @@ class Assignment(db.Model):
                                     'only assignment in draft state can be edited')
 
             assignment.content = assignment_new.content
+        
         else:
             assignment = assignment_new
             db.session.add(assignment_new)
@@ -67,6 +71,7 @@ class Assignment(db.Model):
         assertions.assert_valid(assignment.content is not None, 'assignment with empty content cannot be submitted')
 
         assignment.teacher_id = teacher_id
+        assignment.state=AssignmentStateEnum.SUBMITTED
         db.session.flush()
 
         return assignment
@@ -90,4 +95,10 @@ class Assignment(db.Model):
 
     @classmethod
     def get_assignments_by_teacher(cls, teacher_id):
-        return cls.filter(cls.teacher_id == teacher_id).all()
+        return cls.filter((cls.teacher_id == teacher_id) & (cls.state != AssignmentStateEnum.DRAFT)).all()
+
+    
+    @classmethod
+    def get_all_assignments(cls):
+        all_assignments = cls.query.filter(cls.state != AssignmentStateEnum.DRAFT).all()
+        return all_assignments
